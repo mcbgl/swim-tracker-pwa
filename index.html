@@ -4,9 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Swim Recorder</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Swim Tracker — Live</title>
 <style>
-  :root { --bg-navy: #255471; --bg-teal: #2E6E88; --bg-orange: #F37238; --bg-grey: #7F7F7F; --bg-light: #F2F2F2; }
+  :root {
+    --bg-navy: #255471; --bg-teal: #2E6E88; --bg-orange: #F37238;
+    --bg-grey: #7F7F7F; --bg-light: #F2F2F2;
+    --conf-good: #34d399; --conf-mid: #fbbf24; --conf-bad: #f87171;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
   html, body { margin: 0; padding: 0; height: 100%; background: var(--bg-navy); color: white;
     font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
@@ -14,59 +19,79 @@
   #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
   /* Setup */
-  #setup { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; overflow-y: auto; padding-top: env(safe-area-inset-top, 20px); }
+  #setup { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 14px; overflow-y: auto; padding-top: env(safe-area-inset-top, 20px); }
   h1 { margin: 8px 0 0 0; font-size: 22px; border-bottom: 2px solid var(--bg-orange); padding-bottom: 8px; }
-  .subtle { margin: 0; font-size: 14px; opacity: 0.85; line-height: 1.4; }
+  .subtle { margin: 0; font-size: 13px; opacity: 0.85; line-height: 1.4; }
   .row { display: flex; flex-direction: column; gap: 6px; }
-  .row label { font-size: 13px; color: var(--bg-light); text-transform: uppercase; letter-spacing: 0.5px; }
-  .row input { padding: 14px; border-radius: 8px; border: none; background: white; color: var(--bg-navy); font-size: 17px; font-weight: 500; -webkit-user-select: text; user-select: text; }
-  .pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
-  .pill { flex: 1; min-width: 70px; padding: 12px 8px; background: var(--bg-teal); color: white; border-radius: 999px; text-align: center; font-size: 15px; border: 2px solid transparent; cursor: pointer; }
+  .row label { font-size: 12px; color: var(--bg-light); text-transform: uppercase; letter-spacing: 0.5px; }
+  .row input { padding: 13px; border-radius: 8px; border: none; background: white; color: var(--bg-navy); font-size: 17px; font-weight: 500; -webkit-user-select: text; user-select: text; }
+  .pill-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { flex: 1; min-width: 70px; padding: 11px 8px; background: var(--bg-teal); color: white; border-radius: 999px; text-align: center; font-size: 14px; border: 2px solid transparent; cursor: pointer; }
   .pill.active { background: var(--bg-orange); border-color: white; }
 
-  #start-btn { margin: 12px 0 24px 0; padding: 28px; background: var(--bg-orange); color: white; border: none; border-radius: 16px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; }
+  #start-btn { margin: 12px 0 24px 0; padding: 24px; background: var(--bg-orange); color: white; border: none; border-radius: 16px; font-size: 24px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; }
   #start-btn:disabled { background: var(--bg-grey); }
 
   /* Recording */
   #recording { flex: 1; display: none; flex-direction: column; position: relative; background: black; }
+  #video-wrap { position: absolute; inset: 0; }
   #video { width: 100%; height: 100%; object-fit: cover; }
-  #hud { position: absolute; top: 0; left: 0; right: 0; padding: 16px; padding-top: env(safe-area-inset-top, 16px);
-    background: linear-gradient(180deg, rgba(0,0,0,0.7), rgba(0,0,0,0)); display: flex; justify-content: space-between; align-items: flex-start; }
-  #timer-block { display: flex; flex-direction: column; gap: 4px; }
-  #rec-status { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
-  #rec-dot { width: 12px; height: 12px; border-radius: 50%; background: #f87171; animation: pulse 1.2s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-  #timer { font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-  #target-info { text-align: right; font-size: 13px; opacity: 0.85; line-height: 1.4; }
-  #target-info .big { font-size: 20px; font-weight: 600; }
+  #overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
-  #stop-btn { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px;
-    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0));
+  #hud-top { position: absolute; top: 0; left: 0; right: 0; padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(180deg, rgba(0,0,0,0.75), rgba(0,0,0,0));
+    display: flex; flex-direction: column; gap: 8px; }
+  .hud-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  #rec-status { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  #rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #f87171; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  #conf-block { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  #conf-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--conf-bad); transition: background 0.4s; }
+  #target-info { font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+  #timer { font-size: 14px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+
+  #stat-bar { display: flex; align-items: stretch; gap: 12px; margin-top: 4px; }
+  .stat { flex: 1; }
+  .stat .k { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+  .stat .v { font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .u { font-size: 14px; opacity: 0.7; margin-left: 4px; }
+  .stat.dim .v { opacity: 0.5; }
+
+  #model-loading { position: absolute; inset: 0; background: rgba(37,84,113,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 5; padding: 24px; text-align: center; }
+  #model-loading .spinner { width: 48px; height: 48px; border: 4px solid var(--bg-light); border-top-color: var(--bg-orange); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #stop-btn { position: absolute; bottom: 0; left: 0; right: 0; padding: 24px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
     background: var(--bg-orange); color: white; border: none; font-size: 22px; font-weight: 700; text-transform: uppercase; cursor: pointer; }
 
   /* Saved */
-  #saved { flex: 1; display: none; flex-direction: column; padding: 20px; gap: 14px; overflow-y: auto; padding-top: env(safe-area-inset-top, 20px); }
-  .info-card { background: white; color: var(--bg-navy); padding: 16px; border-radius: 12px; }
-  .info-card .k { font-size: 12px; color: var(--bg-grey); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .info-card .v { font-size: 18px; font-weight: 600; word-break: break-word; }
-  .info-card.big .v { font-size: 28px; font-variant-numeric: tabular-nums; }
-  #playback { width: 100%; border-radius: 12px; background: black; }
+  #saved { flex: 1; display: none; flex-direction: column; padding: 18px; gap: 12px; overflow-y: auto; padding-top: env(safe-area-inset-top, 18px); }
+  .info-card { background: white; color: var(--bg-navy); padding: 14px; border-radius: 12px; }
+  .info-card .k { font-size: 11px; color: var(--bg-grey); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .info-card .v { font-size: 17px; font-weight: 600; word-break: break-word; }
+  .info-card.big .v { font-size: 32px; font-variant-numeric: tabular-nums; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #playback { width: 100%; border-radius: 12px; background: black; max-height: 40vh; }
 
   .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .button-row button { flex: 1; min-width: 140px; padding: 18px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .button-row button { flex: 1; min-width: 130px; padding: 16px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
   #download-btn { background: var(--bg-orange); color: white; }
   #share-btn { background: var(--bg-teal); color: white; }
+  #download-data-btn { background: var(--bg-teal); color: white; }
   #again-btn { background: white; color: var(--bg-navy); }
 
   .err { background: #f87171; color: white; padding: 12px; border-radius: 8px; font-size: 14px; }
+  .warn { background: #fbbf24; color: #1f2937; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
 </style>
 </head>
 <body>
 <div id="app">
 
   <div id="setup">
-    <h1>Swim Recorder</h1>
-    <p class="subtle">Records a tagged video clip with auto-stop at your target duration. The clip carries swimmer / stroke / mode in its filename so the notebook on the Spark knows what to do with it. You can keep counting strokes yourself in parallel.</p>
+    <h1>Swim Tracker — Live</h1>
+    <p class="subtle">Counts strokes live on-device using MediaPipe pose detection. Records the video clip in parallel so you can re-process it on the Spark notebook later.</p>
 
     <div class="row">
       <label>Swimmer</label>
@@ -100,15 +125,23 @@
         <div class="pill active" data-value="90">1.5 min</div>
         <div class="pill" data-value="120">2 min</div>
         <div class="pill" data-value="180">3 min</div>
-        <div class="pill" data-value="0">No auto-stop</div>
+        <div class="pill" data-value="0">Manual</div>
       </div>
     </div>
 
     <div class="row">
       <label>Camera</label>
       <div class="pill-group" id="camera-group">
-        <div class="pill active" data-value="environment">Back camera</div>
-        <div class="pill" data-value="user">Front camera</div>
+        <div class="pill active" data-value="environment">Back</div>
+        <div class="pill" data-value="user">Front</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Pose model</label>
+      <div class="pill-group" id="model-group">
+        <div class="pill active" data-value="lite">Lite (fast)</div>
+        <div class="pill" data-value="full">Full (accurate)</div>
       </div>
     </div>
 
@@ -117,57 +150,134 @@
   </div>
 
   <div id="recording">
-    <video id="video" autoplay muted playsinline></video>
-    <div id="hud">
-      <div id="timer-block">
-        <div id="rec-status"><div id="rec-dot"></div><span>Recording</span></div>
-        <div id="timer">00:00</div>
+    <div id="video-wrap">
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="overlay-canvas"></canvas>
+    </div>
+
+    <div id="hud-top">
+      <div class="hud-row">
+        <div id="rec-status"><div id="rec-dot"></div><span>REC</span><span id="timer">00:00</span></div>
+        <div id="conf-block"><span>Pose</span><div id="conf-dot"></div></div>
       </div>
-      <div id="target-info">
-        <div id="target-stroke">free</div>
-        <div class="big" id="target-time">/ 1:30</div>
+      <div class="hud-row">
+        <div id="target-info">free · endless</div>
+        <div id="target-time">/ 1:30</div>
+      </div>
+      <div id="stat-bar">
+        <div class="stat" id="stat-strokes">
+          <div class="k">Strokes</div>
+          <div><span class="v" id="strokes-val">0</span></div>
+        </div>
+        <div class="stat" id="stat-rate">
+          <div class="k">Rate (30s)</div>
+          <div><span class="v" id="rate-val">0</span><span class="u">/min</span></div>
+        </div>
       </div>
     </div>
-    <button id="stop-btn">Stop & save</button>
+
+    <div id="model-loading">
+      <div class="spinner"></div>
+      <div id="model-loading-msg">Loading pose model…</div>
+      <div class="subtle">First time it takes a few seconds to download. After that it's cached.</div>
+    </div>
+
+    <button id="stop-btn">Stop &amp; save</button>
   </div>
 
   <div id="saved">
-    <h1>Recording saved</h1>
+    <h1>Session saved</h1>
     <video id="playback" controls playsinline></video>
 
-    <div class="info-card big">
+    <div class="stats-grid">
+      <div class="info-card big">
+        <div class="k">Strokes</div>
+        <div class="v" id="info-strokes">—</div>
+      </div>
+      <div class="info-card big">
+        <div class="k">Avg rate</div>
+        <div class="v" id="info-avg-rate">—</div>
+      </div>
+      <div class="info-card">
+        <div class="k">Peak rate (30s)</div>
+        <div class="v" id="info-peak-rate">—</div>
+      </div>
+      <div class="info-card">
+        <div class="k">Duration</div>
+        <div class="v" id="info-duration">—</div>
+      </div>
+      <div class="info-card">
+        <div class="k">Pose confidence</div>
+        <div class="v" id="info-conf">—</div>
+      </div>
+      <div class="info-card">
+        <div class="k">Size</div>
+        <div class="v" id="info-size">—</div>
+      </div>
+    </div>
+
+    <div class="info-card">
       <div class="k">Filename</div>
       <div class="v" id="info-filename">—</div>
     </div>
-    <div class="info-card">
-      <div class="k">Duration</div>
-      <div class="v" id="info-duration">—</div>
-    </div>
-    <div class="info-card">
-      <div class="k">Size</div>
-      <div class="v" id="info-size">—</div>
-    </div>
 
     <div class="button-row">
-      <button id="download-btn">Download</button>
-      <button id="share-btn" style="display:none;">Share</button>
+      <button id="download-btn">Download video</button>
+      <button id="share-btn" style="display:none;">Share video</button>
+      <button id="download-data-btn">Download data (JSON)</button>
       <button id="again-btn">Record again</button>
     </div>
 
-    <p class="subtle">On iPhone: tap Download to save to Files, or tap and hold the video to save to Photos. Then process the clip with the Phase 0.5 notebook on the Spark when you're home.</p>
+    <p class="subtle">Live counts use a centred 5-frame smoother + online peak detector with 0.02 prominence and 400ms minimum spacing — same algorithm the notebook uses, just streamed instead of batched. The JSON file has every detected stroke timestamp and per-frame visibility, so the notebook can re-run from it.</p>
   </div>
 
 </div>
 
-<script>
+<script type="module">
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+// ────────────────────────────────────────────────────────────────────────────
+// Constants
+// ────────────────────────────────────────────────────────────────────────────
+const MODEL_URLS = {
+  lite: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+  full: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+};
+const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+
+// Detection params — match the notebook's detect_strokes() defaults
+const SMOOTH_WINDOW = 9;             // centered moving average size; notebook uses 11-pt Savitzky-Golay, 9-pt MA matches its synthetic-trace counts exactly while adding only ~133ms of detection latency at 30fps
+const SMOOTH_HALF = 4;               // (SMOOTH_WINDOW - 1) / 2
+const PEAK_PROMINENCE = 0.02;        // notebook value
+const MIN_PEAK_SPACING_MS = 400;     // notebook uses fps*0.4 frames ≈ 400ms
+const PROMINENCE_LOOKBACK = 30;      // ~1s of frames to compute prominence against
+const RATE_WINDOW_MS = 30000;        // rolling stroke-rate window
+const RATE_PEAK_HISTORY_S = 30;      // bucket size for "peak rate" stat
+const BUFFER_LIMIT = 600;            // ~20s @ 30fps; we trim aggressively
+
+// Confidence thresholds
+const CONF_GOOD = 0.7;
+const CONF_MID = 0.4;
+const CONF_LOW_FOR_MS = 1500;        // dim the count if conf has been low for this long
+
+// MediaPipe landmark indices
+const LM_NOSE = 0;
+const LM_LEFT_WRIST = 15;
+const LM_RIGHT_WRIST = 16;
+
+// ────────────────────────────────────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────────────────────────────────────
 const state = {
   swimmer: 'Marc',
   stroke: 'free',
   mode: 'endless',
   targetDuration: 90,
   cameraFacing: 'environment',
+  modelSize: 'lite',
+
   startedAt: null,
-  startTime: 0,
+  startTimeMs: 0,
   videoStream: null,
   mediaRecorder: null,
   chunks: [],
@@ -175,12 +285,38 @@ const state = {
   autoStopTimer: null,
   recordedBlob: null,
   recordedUrl: null,
+
+  // Pose
+  poseLandmarker: null,
+  loadedModelSize: null,
+  detectionActive: false,
+  rafHandle: null,
+  lastVideoTime: -1,
+
+  // Live detection buffers
+  buffer: [],          // raw samples: {t, lw, rw, vis}
+  smoothLeft: [],      // {t, v}
+  smoothRight: [],
+  smoothSym: [],
+  leftPeaks: [],       // peak timestamps in performance.now() ms
+  rightPeaks: [],
+  symPeaks: [],
+  confSamples: [],     // {t, v} for confidence dimming + averages
+
+  // Output
+  recordedStats: null,
+  wakeLock: null,
 };
 
 const $ = id => document.getElementById(id);
 const setupDiv = $('setup'), recordingDiv = $('recording'), savedDiv = $('saved');
 const video = $('video');
+const overlay = $('overlay-canvas');
+const overlayCtx = overlay.getContext('2d');
 
+// ────────────────────────────────────────────────────────────────────────────
+// Setup pills
+// ────────────────────────────────────────────────────────────────────────────
 function setupPills(groupId, key, parser = v => v) {
   const group = $(groupId);
   group.addEventListener('click', e => {
@@ -194,19 +330,25 @@ setupPills('stroke-group', 'stroke');
 setupPills('mode-group', 'mode');
 setupPills('duration-group', 'targetDuration', parseInt);
 setupPills('camera-group', 'cameraFacing');
+setupPills('model-group', 'modelSize');
 $('swimmer-name').addEventListener('input', e => state.swimmer = (e.target.value || 'Swimmer').trim());
 
+// ────────────────────────────────────────────────────────────────────────────
+// Formatting helpers
+// ────────────────────────────────────────────────────────────────────────────
 function fmtTime(s) {
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
   return `${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
 }
-
 function fmtSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
   return (bytes/(1024*1024)).toFixed(1) + ' MB';
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// MediaRecorder mime-type pick (iOS Safari preferred path)
+// ────────────────────────────────────────────────────────────────────────────
 function pickMimeType() {
   const candidates = [
     'video/mp4;codecs=h264',
@@ -220,21 +362,264 @@ function pickMimeType() {
       return c;
     }
   }
-  return '';  // Let the browser choose
+  return '';
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Pose model loading (cached across sessions in same page lifetime)
+// ────────────────────────────────────────────────────────────────────────────
+async function ensurePoseLandmarker(size) {
+  if (state.poseLandmarker && state.loadedModelSize === size) return state.poseLandmarker;
+  if (state.poseLandmarker && state.loadedModelSize !== size) {
+    try { state.poseLandmarker.close(); } catch (_) {}
+    state.poseLandmarker = null;
+  }
+  const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
+  const lm = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: MODEL_URLS[size], delegate: "GPU" },
+    runningMode: "VIDEO",
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.4,
+    minPosePresenceConfidence: 0.4,
+    minTrackingConfidence: 0.4,
+  });
+  state.poseLandmarker = lm;
+  state.loadedModelSize = size;
+  return lm;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Online peak detection — same logic as detect_strokes() but streamed
+// ────────────────────────────────────────────────────────────────────────────
+function pushSampleAndDetect(tMs, lwYflipped, rwYflipped, visibility) {
+  state.buffer.push({ t: tMs, lw: lwYflipped, rw: rwYflipped, vis: visibility });
+  if (state.buffer.length > BUFFER_LIMIT) state.buffer.shift();
+
+  state.confSamples.push({ t: tMs, v: visibility });
+  if (state.confSamples.length > BUFFER_LIMIT) state.confSamples.shift();
+
+  // Centered MA: smoothed value at index (length - SMOOTH_HALF - 1)
+  const idx = state.buffer.length - SMOOTH_HALF - 1;
+  if (idx < SMOOTH_HALF) return;
+  let sumL = 0, sumR = 0;
+  for (let i = idx - SMOOTH_HALF; i <= idx + SMOOTH_HALF; i++) {
+    sumL += state.buffer[i].lw;
+    sumR += state.buffer[i].rw;
+  }
+  const smL = sumL / SMOOTH_WINDOW;
+  const smR = sumR / SMOOTH_WINDOW;
+  const tCentre = state.buffer[idx].t;
+  state.smoothLeft.push({ t: tCentre, v: smL });
+  state.smoothRight.push({ t: tCentre, v: smR });
+  state.smoothSym.push({ t: tCentre, v: (smL + smR) / 2 });
+  if (state.smoothLeft.length > BUFFER_LIMIT) state.smoothLeft.shift();
+  if (state.smoothRight.length > BUFFER_LIMIT) state.smoothRight.shift();
+  if (state.smoothSym.length > BUFFER_LIMIT) state.smoothSym.shift();
+
+  detectPeak(state.smoothLeft, state.leftPeaks);
+  detectPeak(state.smoothRight, state.rightPeaks);
+  detectPeak(state.smoothSym, state.symPeaks);
+}
+
+function detectPeak(stream, peaks) {
+  const n = stream.length;
+  if (n < 3) return;
+  const cand = stream[n - 2];
+  const prev = stream[n - 3];
+  const next = stream[n - 1];
+  // Strict local max
+  if (!(cand.v > prev.v && cand.v > next.v)) return;
+  // Prominence vs the lowest value in the recent lookback before this candidate
+  const start = Math.max(0, n - 2 - PROMINENCE_LOOKBACK);
+  let minV = Infinity;
+  for (let i = start; i < n - 2; i++) {
+    if (stream[i].v < minV) minV = stream[i].v;
+  }
+  if (cand.v - minV < PEAK_PROMINENCE) return;
+  // Min spacing
+  if (peaks.length > 0 && cand.t - peaks[peaks.length - 1] < MIN_PEAK_SPACING_MS) return;
+  peaks.push(cand.t);
+}
+
+function getStrokeCount() {
+  if (state.stroke === 'free' || state.stroke === 'back') {
+    return state.leftPeaks.length + state.rightPeaks.length;
+  }
+  return state.symPeaks.length;
+}
+
+function getStrokeRate(nowMs) {
+  const cutoff = nowMs - RATE_WINDOW_MS;
+  let count;
+  if (state.stroke === 'free' || state.stroke === 'back') {
+    count = countSince(state.leftPeaks, cutoff) + countSince(state.rightPeaks, cutoff);
+  } else {
+    count = countSince(state.symPeaks, cutoff);
+  }
+  const elapsedS = (nowMs - state.startTimeMs) / 1000;
+  if (elapsedS < 1) return 0;
+  const windowS = Math.min(elapsedS, RATE_WINDOW_MS / 1000);
+  return (count / windowS) * 60;
+}
+function countSince(arr, cutoff) {
+  let c = 0;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] >= cutoff) c++; else break;
+  }
+  return c;
+}
+
+function getRecentConfidence(nowMs, windowMs = 1000) {
+  const cutoff = nowMs - windowMs;
+  let sum = 0, n = 0;
+  for (let i = state.confSamples.length - 1; i >= 0; i--) {
+    if (state.confSamples[i].t < cutoff) break;
+    sum += state.confSamples[i].v; n++;
+  }
+  return n > 0 ? sum / n : 0;
+}
+
+function getAvgConfidence() {
+  if (state.confSamples.length === 0) return 0;
+  let sum = 0;
+  for (const s of state.confSamples) sum += s.v;
+  return sum / state.confSamples.length;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Detection loop
+// ────────────────────────────────────────────────────────────────────────────
+function startDetectionLoop() {
+  state.detectionActive = true;
+  state.lastVideoTime = -1;
+  const loop = () => {
+    if (!state.detectionActive) return;
+    if (video.readyState >= 2 && video.currentTime !== state.lastVideoTime) {
+      state.lastVideoTime = video.currentTime;
+      const tMs = performance.now();
+      try {
+        const result = state.poseLandmarker.detectForVideo(video, tMs);
+        if (result && result.landmarks && result.landmarks.length > 0) {
+          const lm = result.landmarks[0];
+          const lw = lm[LM_LEFT_WRIST];
+          const rw = lm[LM_RIGHT_WRIST];
+          // Wrist visibility: defined for the Pose Landmarker model
+          const lvis = (lw.visibility !== undefined) ? lw.visibility : 1.0;
+          const rvis = (rw.visibility !== undefined) ? rw.visibility : 1.0;
+          const vis = Math.min(lvis, rvis);
+          // Notebook signal is (1 - y) so peaks correspond to wrist HIGH in frame
+          pushSampleAndDetect(tMs, 1.0 - lw.y, 1.0 - rw.y, vis);
+          drawOverlay(lw, rw, lm[LM_NOSE], vis);
+        } else {
+          // No pose: still record a confidence=0 sample so the dimmer can react
+          state.confSamples.push({ t: tMs, v: 0 });
+          if (state.confSamples.length > BUFFER_LIMIT) state.confSamples.shift();
+          clearOverlay();
+        }
+      } catch (err) {
+        console.warn('detectForVideo failed:', err);
+      }
+    }
+    state.rafHandle = requestAnimationFrame(loop);
+  };
+  state.rafHandle = requestAnimationFrame(loop);
+}
+
+function stopDetectionLoop() {
+  state.detectionActive = false;
+  if (state.rafHandle) { cancelAnimationFrame(state.rafHandle); state.rafHandle = null; }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Overlay drawing — wrist dots only (cheap; just confirms detection is alive)
+// ────────────────────────────────────────────────────────────────────────────
+function ensureOverlaySize() {
+  const w = video.clientWidth, h = video.clientHeight;
+  if (overlay.width !== w || overlay.height !== h) {
+    overlay.width = w; overlay.height = h;
+  }
+}
+function drawOverlay(lw, rw, nose, vis) {
+  ensureOverlaySize();
+  const w = overlay.width, h = overlay.height;
+  overlayCtx.clearRect(0, 0, w, h);
+  overlayCtx.globalAlpha = Math.max(0.3, vis);
+  // Left wrist — teal
+  overlayCtx.fillStyle = '#2E6E88';
+  overlayCtx.beginPath(); overlayCtx.arc(lw.x * w, lw.y * h, 10, 0, Math.PI * 2); overlayCtx.fill();
+  // Right wrist — orange
+  overlayCtx.fillStyle = '#F37238';
+  overlayCtx.beginPath(); overlayCtx.arc(rw.x * w, rw.y * h, 10, 0, Math.PI * 2); overlayCtx.fill();
+  // Nose — small grey
+  overlayCtx.fillStyle = '#F2F2F2';
+  overlayCtx.beginPath(); overlayCtx.arc(nose.x * w, nose.y * h, 5, 0, Math.PI * 2); overlayCtx.fill();
+  overlayCtx.globalAlpha = 1;
+}
+function clearOverlay() {
+  overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// HUD updates
+// ────────────────────────────────────────────────────────────────────────────
+function updateHud() {
+  const now = performance.now();
+  const elapsedS = (now - state.startTimeMs) / 1000;
+  $('timer').textContent = fmtTime(elapsedS);
+
+  $('strokes-val').textContent = getStrokeCount();
+  $('rate-val').textContent = Math.round(getStrokeRate(now));
+
+  const conf = getRecentConfidence(now, 1000);
+  const dot = $('conf-dot');
+  if (conf >= CONF_GOOD)      dot.style.background = 'var(--conf-good)';
+  else if (conf >= CONF_MID)  dot.style.background = 'var(--conf-mid)';
+  else                        dot.style.background = 'var(--conf-bad)';
+  // Dim stats when confidence has been low for a while
+  const lowDuration = (() => {
+    let lastGood = state.startTimeMs;
+    for (let i = state.confSamples.length - 1; i >= 0; i--) {
+      if (state.confSamples[i].v >= CONF_MID) { lastGood = state.confSamples[i].t; break; }
+    }
+    return now - lastGood;
+  })();
+  $('stat-strokes').classList.toggle('dim', lowDuration > CONF_LOW_FOR_MS);
+  $('stat-rate').classList.toggle('dim', lowDuration > CONF_LOW_FOR_MS);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Wake lock — keep screen on during recording
+// ────────────────────────────────────────────────────────────────────────────
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      state.wakeLock = await navigator.wakeLock.request('screen');
+      state.wakeLock.addEventListener('release', () => { state.wakeLock = null; });
+    }
+  } catch (err) { console.warn('wakeLock failed:', err); }
+}
+function releaseWakeLock() {
+  if (state.wakeLock) { try { state.wakeLock.release(); } catch (_) {} state.wakeLock = null; }
+}
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && state.detectionActive && !state.wakeLock) {
+    await acquireWakeLock();
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Start / stop recording
+// ────────────────────────────────────────────────────────────────────────────
 async function startRecording() {
   $('setup-error').innerHTML = '';
   $('start-btn').disabled = true;
 
   if (!navigator.mediaDevices?.getUserMedia) {
-    $('setup-error').innerHTML = `<div class="err">Camera API not available in this browser.</div>`;
-    $('start-btn').disabled = false;
+    showErr('Camera API not available in this browser.');
     return;
   }
   if (!window.MediaRecorder) {
-    $('setup-error').innerHTML = `<div class="err">MediaRecorder API not available in this browser. iOS Safari supports it from 14.3 onwards — try a more recent iOS version.</div>`;
-    $('start-btn').disabled = false;
+    showErr('MediaRecorder API not available. iOS Safari supports it from 14.3 — try a more recent iOS.');
     return;
   }
 
@@ -249,8 +634,7 @@ async function startRecording() {
       audio: false,
     });
   } catch (err) {
-    $('setup-error').innerHTML = `<div class="err">Camera permission denied: ${err.message}. On iPhone, grant Camera access in Safari Settings if needed.</div>`;
-    $('start-btn').disabled = false;
+    showErr(`Camera permission denied: ${err.message}. On iPhone, grant Camera access in Safari Settings if needed.`);
     return;
   }
 
@@ -258,51 +642,76 @@ async function startRecording() {
   video.srcObject = stream;
   await video.play();
 
+  // Reset live detection state
+  state.buffer = []; state.smoothLeft = []; state.smoothRight = []; state.smoothSym = [];
+  state.leftPeaks = []; state.rightPeaks = []; state.symPeaks = []; state.confSamples = [];
+
+  // Show recording view; show loader overlay until model ready
+  setupDiv.style.display = 'none';
+  recordingDiv.style.display = 'flex';
+  savedDiv.style.display = 'none';
+  $('model-loading').style.display = 'flex';
+  $('model-loading-msg').textContent = `Loading ${state.modelSize} pose model…`;
+
+  // Load model (concurrent with camera warmup)
+  try {
+    await ensurePoseLandmarker(state.modelSize);
+  } catch (err) {
+    showErr(`Could not load pose model: ${err.message}`);
+    stream.getTracks().forEach(t => t.stop());
+    setupDiv.style.display = 'flex';
+    recordingDiv.style.display = 'none';
+    return;
+  }
+  $('model-loading').style.display = 'none';
+
   // Start MediaRecorder
   state.chunks = [];
   const mimeType = pickMimeType();
   try {
     state.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
   } catch (err) {
-    $('setup-error').innerHTML = `<div class="err">Could not start recorder: ${err.message}</div>`;
+    showErr(`Could not start recorder: ${err.message}`);
     stream.getTracks().forEach(t => t.stop());
-    $('start-btn').disabled = false;
+    setupDiv.style.display = 'flex';
+    recordingDiv.style.display = 'none';
     return;
   }
-
   state.mediaRecorder.ondataavailable = e => {
     if (e.data && e.data.size > 0) state.chunks.push(e.data);
   };
   state.mediaRecorder.onstop = onRecordingStopped;
 
-  state.startTime = performance.now();
+  state.startTimeMs = performance.now();
   state.startedAt = new Date().toISOString();
   state.mediaRecorder.start();
 
-  setupDiv.style.display = 'none';
-  recordingDiv.style.display = 'flex';
-  savedDiv.style.display = 'none';
-
-  $('target-stroke').textContent = `${state.stroke} · ${state.mode}`;
+  $('target-info').textContent = `${state.swimmer} · ${state.stroke} · ${state.mode}`;
   $('target-time').textContent = state.targetDuration > 0
     ? `/ ${fmtTime(state.targetDuration)}`
     : 'manual stop';
 
-  state.hudInterval = setInterval(() => {
-    const elapsed = (performance.now() - state.startTime) / 1000;
-    $('timer').textContent = fmtTime(elapsed);
-  }, 200);
-
+  state.hudInterval = setInterval(updateHud, 200);
   if (state.targetDuration > 0) {
     state.autoStopTimer = setTimeout(stopRecording, state.targetDuration * 1000);
   }
+
+  await acquireWakeLock();
+  startDetectionLoop();
+}
+
+function showErr(msg) {
+  $('setup-error').innerHTML = `<div class="err">${msg}</div>`;
+  $('start-btn').disabled = false;
 }
 
 function stopRecording() {
   if (state.autoStopTimer) { clearTimeout(state.autoStopTimer); state.autoStopTimer = null; }
   if (state.hudInterval) { clearInterval(state.hudInterval); state.hudInterval = null; }
+  stopDetectionLoop();
+  releaseWakeLock();
   if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
-    state.mediaRecorder.stop();  // triggers onRecordingStopped
+    state.mediaRecorder.stop(); // triggers onRecordingStopped
   } else {
     onRecordingStopped();
   }
@@ -315,69 +724,138 @@ function buildFilename(extension) {
   return `${safe}_${state.stroke}_${state.mode}_${dur}_${ts}.${extension}`;
 }
 
+function computeFinalStats(elapsedS) {
+  const total = getStrokeCount();
+  const avgRate = elapsedS > 0 ? (total / elapsedS) * 60 : 0;
+
+  // Peak rate: scan stroke times, find max count in any RATE_PEAK_HISTORY_S window
+  const allPeaks = (state.stroke === 'free' || state.stroke === 'back')
+    ? [...state.leftPeaks, ...state.rightPeaks].sort((a,b) => a-b)
+    : [...state.symPeaks];
+  let peakRate = 0;
+  const winMs = RATE_PEAK_HISTORY_S * 1000;
+  for (let i = 0; i < allPeaks.length; i++) {
+    let j = i;
+    while (j < allPeaks.length && allPeaks[j] - allPeaks[i] <= winMs) j++;
+    const count = j - i;
+    const winS = Math.min(RATE_PEAK_HISTORY_S, (allPeaks[j-1] - allPeaks[i]) / 1000 || RATE_PEAK_HISTORY_S);
+    const rate = winS > 0 ? (count / winS) * 60 : 0;
+    if (rate > peakRate) peakRate = rate;
+  }
+
+  return {
+    swimmer: state.swimmer,
+    stroke: state.stroke,
+    mode: state.mode,
+    target_duration_s: state.targetDuration,
+    started_at: state.startedAt,
+    duration_s: elapsedS,
+    total_strokes: total,
+    avg_stroke_rate_per_min: avgRate,
+    peak_stroke_rate_per_min: peakRate,
+    avg_pose_visibility: getAvgConfidence(),
+    model_size: state.loadedModelSize,
+    left_peaks_ms: state.leftPeaks.map(t => Math.round(t - state.startTimeMs)),
+    right_peaks_ms: state.rightPeaks.map(t => Math.round(t - state.startTimeMs)),
+    sym_peaks_ms: state.symPeaks.map(t => Math.round(t - state.startTimeMs)),
+    visibility_samples: state.confSamples.map(s => ({
+      t_ms: Math.round(s.t - state.startTimeMs),
+      v: Number(s.v.toFixed(3)),
+    })),
+  };
+}
+
 function onRecordingStopped() {
-  // Stop the camera
   if (state.videoStream) {
     state.videoStream.getTracks().forEach(t => t.stop());
     state.videoStream = null;
   }
+  clearOverlay();
 
-  const elapsedSec = (performance.now() - state.startTime) / 1000;
+  const elapsedS = (performance.now() - state.startTimeMs) / 1000;
   const mimeType = state.mediaRecorder?.mimeType || (state.chunks[0] && state.chunks[0].type) || 'video/webm';
   const blob = new Blob(state.chunks, { type: mimeType });
   state.recordedBlob = blob;
   if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
   state.recordedUrl = URL.createObjectURL(blob);
 
+  const stats = computeFinalStats(elapsedS);
+  state.recordedStats = stats;
+
   recordingDiv.style.display = 'none';
   savedDiv.style.display = 'flex';
-
-  const playback = $('playback');
-  playback.src = state.recordedUrl;
+  $('playback').src = state.recordedUrl;
 
   const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
   const filename = buildFilename(ext);
 
-  $('info-filename').textContent = filename;
-  $('info-duration').textContent = fmtTime(elapsedSec);
+  $('info-strokes').textContent = stats.total_strokes;
+  $('info-avg-rate').textContent = `${Math.round(stats.avg_stroke_rate_per_min)} /min`;
+  $('info-peak-rate').textContent = `${Math.round(stats.peak_stroke_rate_per_min)} /min`;
+  $('info-duration').textContent = fmtTime(elapsedS);
+  $('info-conf').textContent = `${Math.round(stats.avg_pose_visibility * 100)}%`;
   $('info-size').textContent = fmtSize(blob.size);
+  $('info-filename').textContent = filename;
 
-  // Download button
   $('download-btn').onclick = () => {
     const a = document.createElement('a');
     a.href = state.recordedUrl;
     a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    document.body.appendChild(a); a.click(); a.remove();
   };
 
-  // Share button (iOS-friendly)
+  $('download-data-btn').onclick = () => {
+    const jsonName = filename.replace(/\.[^.]+$/, '.json');
+    const dataBlob = new Blob([JSON.stringify(stats, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url; a.download = jsonName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   if (navigator.canShare) {
     const file = new File([blob], filename, { type: mimeType });
     if (navigator.canShare({ files: [file] })) {
       $('share-btn').style.display = '';
       $('share-btn').onclick = async () => {
-        try {
-          await navigator.share({ files: [file], title: filename });
-        } catch (err) {
-          // user cancelled or sharing failed; ignore
-        }
+        try { await navigator.share({ files: [file], title: filename }); }
+        catch (_) { /* cancelled */ }
       };
     }
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Wiring
+// ────────────────────────────────────────────────────────────────────────────
 $('start-btn').addEventListener('click', startRecording);
 $('stop-btn').addEventListener('click', stopRecording);
 $('again-btn').addEventListener('click', () => {
   if (state.recordedUrl) { URL.revokeObjectURL(state.recordedUrl); state.recordedUrl = null; }
   state.recordedBlob = null;
+  state.recordedStats = null;
   state.chunks = [];
+  $('share-btn').style.display = 'none';
   savedDiv.style.display = 'none';
   setupDiv.style.display = 'flex';
   $('start-btn').disabled = false;
 });
+
+// Expose detector helpers for the synthetic smoke test (loaded by test page)
+window.__swimTracker = {
+  pushSampleAndDetect,
+  detectPeak,
+  state,
+  reset() {
+    state.buffer.length = 0;
+    state.smoothLeft.length = 0; state.smoothRight.length = 0; state.smoothSym.length = 0;
+    state.leftPeaks.length = 0; state.rightPeaks.length = 0; state.symPeaks.length = 0;
+    state.confSamples.length = 0;
+    state.startTimeMs = 0;
+  },
+  constants: { SMOOTH_WINDOW, PEAK_PROMINENCE, MIN_PEAK_SPACING_MS, PROMINENCE_LOOKBACK },
+};
 </script>
 </body>
 </html>
