@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Swim Recorder</title>
+<style>
+  :root { --bg-navy: #255471; --bg-teal: #2E6E88; --bg-orange: #F37238; --bg-grey: #7F7F7F; --bg-light: #F2F2F2; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg-navy); color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    overflow: hidden; touch-action: manipulation; }
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+  /* Setup */
+  #setup { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; overflow-y: auto; padding-top: env(safe-area-inset-top, 20px); }
+  h1 { margin: 8px 0 0 0; font-size: 22px; border-bottom: 2px solid var(--bg-orange); padding-bottom: 8px; }
+  .subtle { margin: 0; font-size: 14px; opacity: 0.85; line-height: 1.4; }
+  .row { display: flex; flex-direction: column; gap: 6px; }
+  .row label { font-size: 13px; color: var(--bg-light); text-transform: uppercase; letter-spacing: 0.5px; }
+  .row input { padding: 14px; border-radius: 8px; border: none; background: white; color: var(--bg-navy); font-size: 17px; font-weight: 500; -webkit-user-select: text; user-select: text; }
+  .pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { flex: 1; min-width: 70px; padding: 12px 8px; background: var(--bg-teal); color: white; border-radius: 999px; text-align: center; font-size: 15px; border: 2px solid transparent; cursor: pointer; }
+  .pill.active { background: var(--bg-orange); border-color: white; }
+
+  #start-btn { margin: 12px 0 24px 0; padding: 28px; background: var(--bg-orange); color: white; border: none; border-radius: 16px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; }
+  #start-btn:disabled { background: var(--bg-grey); }
+
+  /* Recording */
+  #recording { flex: 1; display: none; flex-direction: column; position: relative; background: black; }
+  #video { width: 100%; height: 100%; object-fit: cover; }
+  #hud { position: absolute; top: 0; left: 0; right: 0; padding: 16px; padding-top: env(safe-area-inset-top, 16px);
+    background: linear-gradient(180deg, rgba(0,0,0,0.7), rgba(0,0,0,0)); display: flex; justify-content: space-between; align-items: flex-start; }
+  #timer-block { display: flex; flex-direction: column; gap: 4px; }
+  #rec-status { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  #rec-dot { width: 12px; height: 12px; border-radius: 50%; background: #f87171; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  #timer { font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  #target-info { text-align: right; font-size: 13px; opacity: 0.85; line-height: 1.4; }
+  #target-info .big { font-size: 20px; font-weight: 600; }
+
+  #stop-btn { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0));
+    background: var(--bg-orange); color: white; border: none; font-size: 22px; font-weight: 700; text-transform: uppercase; cursor: pointer; }
+
+  /* Saved */
+  #saved { flex: 1; display: none; flex-direction: column; padding: 20px; gap: 14px; overflow-y: auto; padding-top: env(safe-area-inset-top, 20px); }
+  .info-card { background: white; color: var(--bg-navy); padding: 16px; border-radius: 12px; }
+  .info-card .k { font-size: 12px; color: var(--bg-grey); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .info-card .v { font-size: 18px; font-weight: 600; word-break: break-word; }
+  .info-card.big .v { font-size: 28px; font-variant-numeric: tabular-nums; }
+  #playback { width: 100%; border-radius: 12px; background: black; }
+
+  .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .button-row button { flex: 1; min-width: 140px; padding: 18px; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  #download-btn { background: var(--bg-orange); color: white; }
+  #share-btn { background: var(--bg-teal); color: white; }
+  #again-btn { background: white; color: var(--bg-navy); }
+
+  .err { background: #f87171; color: white; padding: 12px; border-radius: 8px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="setup">
+    <h1>Swim Recorder</h1>
+    <p class="subtle">Records a tagged video clip with auto-stop at your target duration. The clip carries swimmer / stroke / mode in its filename so the notebook on the Spark knows what to do with it. You can keep counting strokes yourself in parallel.</p>
+
+    <div class="row">
+      <label>Swimmer</label>
+      <input id="swimmer-name" type="text" value="Marc">
+    </div>
+
+    <div class="row">
+      <label>Stroke</label>
+      <div class="pill-group" id="stroke-group">
+        <div class="pill active" data-value="free">Free</div>
+        <div class="pill" data-value="back">Back</div>
+        <div class="pill" data-value="breast">Breast</div>
+        <div class="pill" data-value="fly">Fly</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Pool / Mode</label>
+      <div class="pill-group" id="mode-group">
+        <div class="pill active" data-value="endless">Endless / Timed</div>
+        <div class="pill" data-value="lap_25">25m lap</div>
+        <div class="pill" data-value="lap_50">50m lap</div>
+      </div>
+    </div>
+
+    <div class="row" id="duration-row">
+      <label>Target duration</label>
+      <div class="pill-group" id="duration-group">
+        <div class="pill" data-value="30">30s</div>
+        <div class="pill" data-value="60">1 min</div>
+        <div class="pill active" data-value="90">1.5 min</div>
+        <div class="pill" data-value="120">2 min</div>
+        <div class="pill" data-value="180">3 min</div>
+        <div class="pill" data-value="0">No auto-stop</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Camera</label>
+      <div class="pill-group" id="camera-group">
+        <div class="pill active" data-value="environment">Back camera</div>
+        <div class="pill" data-value="user">Front camera</div>
+      </div>
+    </div>
+
+    <button id="start-btn">Start recording</button>
+    <div id="setup-error"></div>
+  </div>
+
+  <div id="recording">
+    <video id="video" autoplay muted playsinline></video>
+    <div id="hud">
+      <div id="timer-block">
+        <div id="rec-status"><div id="rec-dot"></div><span>Recording</span></div>
+        <div id="timer">00:00</div>
+      </div>
+      <div id="target-info">
+        <div id="target-stroke">free</div>
+        <div class="big" id="target-time">/ 1:30</div>
+      </div>
+    </div>
+    <button id="stop-btn">Stop & save</button>
+  </div>
+
+  <div id="saved">
+    <h1>Recording saved</h1>
+    <video id="playback" controls playsinline></video>
+
+    <div class="info-card big">
+      <div class="k">Filename</div>
+      <div class="v" id="info-filename">—</div>
+    </div>
+    <div class="info-card">
+      <div class="k">Duration</div>
+      <div class="v" id="info-duration">—</div>
+    </div>
+    <div class="info-card">
+      <div class="k">Size</div>
+      <div class="v" id="info-size">—</div>
+    </div>
+
+    <div class="button-row">
+      <button id="download-btn">Download</button>
+      <button id="share-btn" style="display:none;">Share</button>
+      <button id="again-btn">Record again</button>
+    </div>
+
+    <p class="subtle">On iPhone: tap Download to save to Files, or tap and hold the video to save to Photos. Then process the clip with the Phase 0.5 notebook on the Spark when you're home.</p>
+  </div>
+
+</div>
+
+<script>
+const state = {
+  swimmer: 'Marc',
+  stroke: 'free',
+  mode: 'endless',
+  targetDuration: 90,
+  cameraFacing: 'environment',
+  startedAt: null,
+  startTime: 0,
+  videoStream: null,
+  mediaRecorder: null,
+  chunks: [],
+  hudInterval: null,
+  autoStopTimer: null,
+  recordedBlob: null,
+  recordedUrl: null,
+};
+
+const $ = id => document.getElementById(id);
+const setupDiv = $('setup'), recordingDiv = $('recording'), savedDiv = $('saved');
+const video = $('video');
+
+function setupPills(groupId, key, parser = v => v) {
+  const group = $(groupId);
+  group.addEventListener('click', e => {
+    const t = e.target.closest('.pill'); if (!t) return;
+    [...group.children].forEach(p => p.classList.remove('active'));
+    t.classList.add('active');
+    state[key] = parser(t.dataset.value);
+  });
+}
+setupPills('stroke-group', 'stroke');
+setupPills('mode-group', 'mode');
+setupPills('duration-group', 'targetDuration', parseInt);
+setupPills('camera-group', 'cameraFacing');
+$('swimmer-name').addEventListener('input', e => state.swimmer = (e.target.value || 'Swimmer').trim());
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function pickMimeType() {
+  const candidates = [
+    'video/mp4;codecs=h264',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ];
+  for (const c of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) {
+      return c;
+    }
+  }
+  return '';  // Let the browser choose
+}
+
+async function startRecording() {
+  $('setup-error').innerHTML = '';
+  $('start-btn').disabled = true;
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    $('setup-error').innerHTML = `<div class="err">Camera API not available in this browser.</div>`;
+    $('start-btn').disabled = false;
+    return;
+  }
+  if (!window.MediaRecorder) {
+    $('setup-error').innerHTML = `<div class="err">MediaRecorder API not available in this browser. iOS Safari supports it from 14.3 onwards — try a more recent iOS version.</div>`;
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: state.cameraFacing },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+  } catch (err) {
+    $('setup-error').innerHTML = `<div class="err">Camera permission denied: ${err.message}. On iPhone, grant Camera access in Safari Settings if needed.</div>`;
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  state.videoStream = stream;
+  video.srcObject = stream;
+  await video.play();
+
+  // Start MediaRecorder
+  state.chunks = [];
+  const mimeType = pickMimeType();
+  try {
+    state.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  } catch (err) {
+    $('setup-error').innerHTML = `<div class="err">Could not start recorder: ${err.message}</div>`;
+    stream.getTracks().forEach(t => t.stop());
+    $('start-btn').disabled = false;
+    return;
+  }
+
+  state.mediaRecorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) state.chunks.push(e.data);
+  };
+  state.mediaRecorder.onstop = onRecordingStopped;
+
+  state.startTime = performance.now();
+  state.startedAt = new Date().toISOString();
+  state.mediaRecorder.start();
+
+  setupDiv.style.display = 'none';
+  recordingDiv.style.display = 'flex';
+  savedDiv.style.display = 'none';
+
+  $('target-stroke').textContent = `${state.stroke} · ${state.mode}`;
+  $('target-time').textContent = state.targetDuration > 0
+    ? `/ ${fmtTime(state.targetDuration)}`
+    : 'manual stop';
+
+  state.hudInterval = setInterval(() => {
+    const elapsed = (performance.now() - state.startTime) / 1000;
+    $('timer').textContent = fmtTime(elapsed);
+  }, 200);
+
+  if (state.targetDuration > 0) {
+    state.autoStopTimer = setTimeout(stopRecording, state.targetDuration * 1000);
+  }
+}
+
+function stopRecording() {
+  if (state.autoStopTimer) { clearTimeout(state.autoStopTimer); state.autoStopTimer = null; }
+  if (state.hudInterval) { clearInterval(state.hudInterval); state.hudInterval = null; }
+  if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+    state.mediaRecorder.stop();  // triggers onRecordingStopped
+  } else {
+    onRecordingStopped();
+  }
+}
+
+function buildFilename(extension) {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const safe = state.swimmer.replace(/[^A-Za-z0-9]/g, '_');
+  const dur = state.targetDuration > 0 ? `${state.targetDuration}s` : 'manual';
+  return `${safe}_${state.stroke}_${state.mode}_${dur}_${ts}.${extension}`;
+}
+
+function onRecordingStopped() {
+  // Stop the camera
+  if (state.videoStream) {
+    state.videoStream.getTracks().forEach(t => t.stop());
+    state.videoStream = null;
+  }
+
+  const elapsedSec = (performance.now() - state.startTime) / 1000;
+  const mimeType = state.mediaRecorder?.mimeType || (state.chunks[0] && state.chunks[0].type) || 'video/webm';
+  const blob = new Blob(state.chunks, { type: mimeType });
+  state.recordedBlob = blob;
+  if (state.recordedUrl) URL.revokeObjectURL(state.recordedUrl);
+  state.recordedUrl = URL.createObjectURL(blob);
+
+  recordingDiv.style.display = 'none';
+  savedDiv.style.display = 'flex';
+
+  const playback = $('playback');
+  playback.src = state.recordedUrl;
+
+  const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const filename = buildFilename(ext);
+
+  $('info-filename').textContent = filename;
+  $('info-duration').textContent = fmtTime(elapsedSec);
+  $('info-size').textContent = fmtSize(blob.size);
+
+  // Download button
+  $('download-btn').onclick = () => {
+    const a = document.createElement('a');
+    a.href = state.recordedUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  // Share button (iOS-friendly)
+  if (navigator.canShare) {
+    const file = new File([blob], filename, { type: mimeType });
+    if (navigator.canShare({ files: [file] })) {
+      $('share-btn').style.display = '';
+      $('share-btn').onclick = async () => {
+        try {
+          await navigator.share({ files: [file], title: filename });
+        } catch (err) {
+          // user cancelled or sharing failed; ignore
+        }
+      };
+    }
+  }
+}
+
+$('start-btn').addEventListener('click', startRecording);
+$('stop-btn').addEventListener('click', stopRecording);
+$('again-btn').addEventListener('click', () => {
+  if (state.recordedUrl) { URL.revokeObjectURL(state.recordedUrl); state.recordedUrl = null; }
+  state.recordedBlob = null;
+  state.chunks = [];
+  savedDiv.style.display = 'none';
+  setupDiv.style.display = 'flex';
+  $('start-btn').disabled = false;
+});
+</script>
+</body>
+</html>
